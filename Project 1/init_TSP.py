@@ -68,3 +68,5 @@ def init_pop(pop_size, city_table):
 table = init_pop(5, city_10)
 k_select = random.sample(range(0, 100), 2)
 print(k_select)
+a = [1,3,3,4,5]
+print(a[-1])

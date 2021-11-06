@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import random
 import math
+import heapq
 
 numberOfCity = 10
 
@@ -11,7 +12,7 @@ city_10 = pd.DataFrame(np.array([[0.3642,0.7779], [0.7185,0.8312], [0.0986,0.589
                        columns=['x', 'y'])
 
 
-def init_para(pop_size=10, mutation_rate=0.03, crossover_rate=0.8, chromosome_len=30, max_generation=50):
+def init_para(pop_size=100, mutation_rate=0.03, crossover_rate=0.8, chromosome_len=30, k_tournament=6):
     """
     Initialize parameters for Genetic algorithms.
     crossover_rate: Probability of crossover (typically near 1)
@@ -19,7 +20,7 @@ def init_para(pop_size=10, mutation_rate=0.03, crossover_rate=0.8, chromosome_le
     :return: A dictionary with parameters as key
     """
     para_dict = {'pop_size': pop_size, 'mutation_rate': mutation_rate, 'crossover_rate': crossover_rate,
-                 'chromosome_len': chromosome_len, 'max_generation': max_generation}
+                 'chromosome_len': chromosome_len, 'k_tournament': k_tournament}
     return para_dict
 
 
@@ -31,7 +32,7 @@ def generate_chromosome(numberOfCity):
     :return: List chromosome
     """
     chromosome = random.sample(range(0, numberOfCity), numberOfCity)
-    chromosome.append(chromosome[0])
+    # chromosome.append(chromosome[0])
     return chromosome
 
 
@@ -47,7 +48,13 @@ def cal_fitness(chromosome, city_table):
         city_b_y = city_table.iloc[chromosome[i+1], 1]
         dis = np.round(math.sqrt(((city_a_x - city_b_x)**2) + ((city_a_y - city_b_y)**2)), 5)
         fitness += dis
-    fitness = fitness/(len(chromosome)-1)
+    city_end_x = city_table.iloc[chromosome[-1], 0]
+    city_end_y = city_table.iloc[chromosome[-1], 1]
+    city_start_x = city_table.iloc[chromosome[0], 0]
+    city_start_y = city_table.iloc[chromosome[0], 0]
+    dis = np.round(math.sqrt(((city_end_x - city_start_x) ** 2) + ((city_end_y - city_start_y) ** 2)), 5)
+    fitness += dis
+    fitness = fitness/(len(chromosome))
     return (1/fitness) * 100
 
 
@@ -78,7 +85,7 @@ def tournament_selection(pop_table, k):
     k_table = pd.DataFrame(columns=['chromosome', 'fitness'])
     k_final = pd.DataFrame(columns=['chromosome', 'fitness'])
     for i in range(len(k_select)):
-        extract = pop_table.iloc[k_select[i]]
+        extract = pop_table.iloc[k_select[i]].copy()
         k_table = k_table.append(extract)
     # Select the highest fitness score in the selected k chromosome
     h = k_table['fitness'].idxmax()
@@ -88,16 +95,76 @@ def tournament_selection(pop_table, k):
 
 def selection(pop_table, k):
     """
-    Perform 2 tournament selection and select the best one among them.
+    Perform 2 tournament selection and make sure they are different.
     """
     k1 = tournament_selection(pop_table, k)
     k2 = tournament_selection(pop_table, k)
-    if k1['fitness'].iloc[0] > k2['fitness'].iloc[0]:
-        return k1
-    return k2
+    while k1['chromosome'].iloc[0] == k2['chromosome'].iloc[0]:
+        k2 = tournament_selection(pop_table, k)
+    k1 = k1.append(k2)
+    return k1
+
+
+def crossover(parent1, parent2):
+    """
+    Perform recombination for order-based representation
+    :return: dataframe with 2 new offsprings
+    """
+    c1 = parent1['chromosome'].iloc[0].copy()
+    c2 = parent2['chromosome'].iloc[0].copy()
+    start = random.randint(0, len(c1)-1)
+    end = random.randint(start, len(c1)-1)
+    difference = list(set(c2) - set(c1[start:end+1]))
+    # print(c1)
+    # print(c2)
+    # print(c1[start:end+1])
+    # print(difference)
+    order_q = []
+    for i in range(len(difference)):
+        heapq.heappush(order_q, (c2.index(difference[i]), difference[i]))
+    # print(order_q)
+    for i in range(len(c1)):
+        if i < start or i > end:
+            c1[i] = heapq.heappop(order_q)[1]
+    # print(c1)
+    return c1
+
+
+def crossover_all(parent1, parent2):
+    c1 = crossover(parent1, parent2)
+    c2 = crossover(parent2, parent1)
+    return c1, c2
+
+
+def mutation(chromosome):
+    point1 = random.randint(0, len(chromosome) - 1)
+    point2 = random.randint(0, len(chromosome) - 1)
+    while point1 == point2:
+        point2 = random.randint(0, len(chromosome) - 1)
+    chromosome[point2], chromosome[point1] = chromosome[point1], chromosome[point2]
+    return chromosome
+
+
+def mutation_all(parent, city_table):
+    parent1 = parent[0]
+    parent2 = parent[1]
+    f_offspring1 = mutation(parent1)
+    f_offspring2 = mutation(parent2)
+    fitness1 = cal_fitness(f_offspring1, city_table)
+    fitness2 = cal_fitness(f_offspring2, city_table)
+    offspring = pd.DataFrame({'chromosome': [f_offspring1, f_offspring2], 'fitness': [fitness1, fitness2]})
+    return offspring
+
+def GA_process(para, city_table=city_10):
+    pop_table = init_pop(para['pop_size'], city_10)
+    print(pop_table.head(5))
+    parent = selection(pop_table, para['k_tournament'])
+    temp_sons = crossover_all(parent[0:1], parent[1:2])
+    offspring = mutation_all(temp_sons, city_10)
+
+# init_para(pop_size=100, mutation_rate=0.03, crossover_rate=0.8, chromosome_len=30, k_tournament=6):
 
 
 if __name__ == "__main__":
-    pop_table = init_pop(20, city_10)
-    parent1 = selection(pop_table, 3)
-    parent2 = selection(pop_table, 3)
+    random.seed(32)
+

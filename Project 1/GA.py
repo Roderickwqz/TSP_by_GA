@@ -12,7 +12,7 @@ city_10 = pd.DataFrame(np.array([[0.3642,0.7779], [0.7185,0.8312], [0.0986,0.589
                        columns=['x', 'y'])
 
 
-def init_para(pop_size=100, mutation_rate=0.03, crossover_rate=0.8, chromosome_len=30, k_tournament=6):
+def init_para(pop_size=10, mutation_rate=0.03, crossover_rate=0.8, chromosome_len=30, k_tournament=4):
     """
     Initialize parameters for Genetic algorithms.
     crossover_rate: Probability of crossover (typically near 1)
@@ -155,16 +155,23 @@ def mutation_all(parent, city_table):
     offspring = pd.DataFrame({'chromosome': [f_offspring1, f_offspring2], 'fitness': [fitness1, fitness2]})
     return offspring
 
+
 def GA_process(para, city_table=city_10):
     pop_table = init_pop(para['pop_size'], city_10)
-    print(pop_table.head(5))
+    print(pop_table)
     parent = selection(pop_table, para['k_tournament'])
     temp_sons = crossover_all(parent[0:1], parent[1:2])
     offspring = mutation_all(temp_sons, city_10)
+    pop_table = pop_table.append(offspring, ignore_index=True)
+    pop_table = pop_table.loc[pop_table['fitness'] != pop_table['fitness'].min()]
+    pop_table = pop_table.loc[pop_table['fitness'] != pop_table['fitness'].min()]
+    pop_table = pop_table.reset_index(drop=True)
+    print(pop_table)
 
 # init_para(pop_size=100, mutation_rate=0.03, crossover_rate=0.8, chromosome_len=30, k_tournament=6):
 
 
 if __name__ == "__main__":
     random.seed(32)
-
+    par = init_para()
+    GA_process(par)

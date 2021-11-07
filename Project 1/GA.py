@@ -3,6 +3,7 @@ import pandas as pd
 import random
 import math
 import heapq
+import matplotlib.pyplot as plt
 
 numberOfCity = 10
 
@@ -41,21 +42,21 @@ def cal_fitness(chromosome, city_table):
     This function calculate the chromosome's fitness score which equal to average of sum of distance * 1000.
     """
     fitness = 0
-    for i in range(len(chromosome)-1):
+    for i in range(-1, len(chromosome)-1):
         city_a_x = city_table.iloc[chromosome[i], 0]
         city_a_y = city_table.iloc[chromosome[i], 1]
         city_b_x = city_table.iloc[chromosome[i+1], 0]
         city_b_y = city_table.iloc[chromosome[i+1], 1]
         dis = np.round(math.sqrt(((city_a_x - city_b_x)**2) + ((city_a_y - city_b_y)**2)), 5)
         fitness += dis
-    city_end_x = city_table.iloc[chromosome[-1], 0]
-    city_end_y = city_table.iloc[chromosome[-1], 1]
-    city_start_x = city_table.iloc[chromosome[0], 0]
-    city_start_y = city_table.iloc[chromosome[0], 0]
-    dis = np.round(math.sqrt(((city_end_x - city_start_x) ** 2) + ((city_end_y - city_start_y) ** 2)), 5)
-    fitness += dis
+    # city_end_x = city_table.iloc[chromosome[-1], 0]
+    # city_end_y = city_table.iloc[chromosome[-1], 1]
+    # city_start_x = city_table.iloc[chromosome[0], 0]
+    # city_start_y = city_table.iloc[chromosome[0], 0]
+    # dis = np.round(math.sqrt(((city_end_x - city_start_x) ** 2) + ((city_end_y - city_start_y) ** 2)), 5)
+    # fitness += dis
     # fitness = fitness/(len(chromosome))
-    return (1/fitness) * 10
+    return (1/fitness) * 100
 
 
 def init_pop(pop_size, city_table):
@@ -179,13 +180,11 @@ def GA_process(para, city_table=city_10):
     # print('The initial population')
     # print(pop_table)
     epoch = 0
+    avg_fit = []
+    best_fit = []
     while epoch < para['max_generation']:
         print('The current epoch is ' + str(epoch))
         # print('The current len of population is ' + str(len(pop_table)))
-        # if epoch == 19:
-        #     print('The population table before GA when 19')
-        #     print(pop_table)
-
         parent = selection(pop_table, para['k_tournament'])
 
         # Perform crossover if within probability
@@ -199,41 +198,100 @@ def GA_process(para, city_table=city_10):
             pop_table = pop_table.append(offspring, ignore_index=True)
         else:
             mutation_p = random.random()
+            offspring = parent
             if mutation_p < para['mutation_rate']:
                 offspring = mutation_all(offspring, city_table)
                 pop_table = pop_table.append(offspring, ignore_index=True)
 
         # print('The number of chromosome in population is :' + str(len(pop_table)))
-        # if epoch == 19:
-        #     print('The offspring after GA WHEN 19')
-        #     print(offspring)
-        #     print('The population table after GA when 19')
-        #     print(pop_table)
         # Elitism
         if len(pop_table) == para['pop_size'] + 2:
             pop_table = pop_table.drop(pop_table['fitness'].astype('float64').idxmin())
             pop_table = pop_table.drop(pop_table['fitness'].astype('float64').idxmin())
             pop_table = pop_table.reset_index(drop=True)
-            # if epoch == 19:
-            #     print('The population table after elitism when 19')
-            #     print(pop_table)
         epoch += 1
-    # print('The population table after genetic algorithm')
-    print(pop_table)
+        mean_fit = pop_table['fitness'].mean()
+        max_fit = pop_table['fitness'].max()
+        avg_fit.append(mean_fit)
+        best_fit.append(max_fit)
+        print('The mean fitness of pop is '+ str(mean_fit))
 
-# init_para(pop_size=100, mutation_rate=0.03, crossover_rate=0.8, chromosome_len=30, k_tournament=6):
+        # Print out the optimal
+        optimal = pop_table.iloc[pop_table['fitness'].astype('float').idxmax()]
+        print('the optimal distance is ' + str(100/(optimal['fitness'])))
+        # print(optimal)
+
+    # print('The population table after genetic algorithm')
+    # print(pop_table)
+    optimal_solution = pop_table.iloc[pop_table['fitness'].astype('float').idxmax()]
+    optimal_distance = str(100/(optimal['fitness']))
+    return optimal_solution, optimal_distance, avg_fit, best_fit
+
+
+def draw(para, optimal, avg_fit, best_fit):
+    fig = plt.figure()
+    ax1 = fig.add_subplot(121)
+    ax2 = fig.add_subplot(122)
+
+    ax1.plot(range(0, para['max_generation']), avg_fit, c="green")
+    ax2.plot(range(0, para['max_generation']), best_fit, c="green")
+
+    ax1.title.set_text('Average fitness score')
+    ax2.title.set_text('Best fitness score')
+
+    plt.show()
+
+
+def add_more_city(org_table, num):
+    for i in range(num):
+        new_x = random.random()
+        new_y = random.random()
+        org_table.loc[-i-1] = [new_x, new_y]
+    org_table = org_table.reset_index(drop=True)
+    return org_table
+
+
+def crossover2(parent1, parent2):
+    """
+    Perform recombination for order-based representation
+    :return: dataframe with 2 new offsprings
+    """
+    c1 = parent1['chromosome'].iloc[0].copy()
+    c2 = parent2['chromosome'].iloc[0].copy()
+    start = random.randint(0, len(c1)-1)
+    end = random.randint(start, len(c1)-1)
+    c1_ex = c1[start:end]
+    c2_ex = [item for item in c2 if item not in c1_ex]
+    new = []
+    p1 = 0
+    p2 = 0
+    for i in range(len(c1)):
+        if i < start or i > end:
+            new.append(c2_ex[p2])
+            p2 += 1
+        else:
+            new.append(c1_ex[p1])
+            p1 += 1
+    return new
 
 
 if __name__ == "__main__":
-    random.seed()
-    par = init_para(pop_size=100, max_gen=30)
-    GA_process(par)
+    random.seed(10)
+    par = init_para(pop_size=10, max_gen=15, k_tournament=3, crossover_rate=0.85, mutation_rate=0.3)
+    # result = GA_process(par)
+    # draw(par, result[0], result[2], result[3])
 
-    # population_table = init_pop(10, city_10)
-    # print(len(population_table))
-    # parent = selection(pop_table, 3)
-    # temp_sons = crossover_all(parent[0:1], parent[1:2], city_10)
-    # print(temp_sons)
-    # offspring = mutation_all(temp_sons, city_10)
-    # print(offspring)
-    # print(parent)
+    # more_city = add_more_city(city_10, 24)
+    # result = GA_process(par)
+    # print(result[0])
+    pop_table = init_pop(par['pop_size'], city_10)
+    print(pop_table)
+    parent = selection(pop_table, par['k_tournament'])
+    print(parent)
+
+
+    offspring = crossover2(parent[0:1], parent[1:2])
+    print(offspring)
+
+
+

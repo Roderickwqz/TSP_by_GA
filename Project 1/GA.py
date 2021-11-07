@@ -4,6 +4,13 @@ import random
 import math
 import heapq
 import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+import os
+from sklearn.cluster import Birch
+from sklearn.cluster import KMeans
+from sklearn.cluster import AffinityPropagation
+from sklearn.cluster import DBSCAN
+from sklearn.cluster import SpectralClustering
 
 numberOfCity = 10
 
@@ -25,16 +32,18 @@ def init_para(pop_size=10, mutation_rate=0.03, crossover_rate=0.8, chromosome_le
     return para_dict
 
 
-def generate_chromosome(numberOfCity):
+def generate_chromosome(numberOfCity, fixed_pos=[]):
     """
     generate a chromosome based on number of city. The chromosome has first and end value the same for indicating
     circular motion.
     :param numberOfCity: number of cities need to be traveled
+    :param fixed_pos: List of position that need to be traversed sequentially
     :return: List chromosome
     """
     chromosome = random.sample(range(0, numberOfCity), numberOfCity)
-    # chromosome.append(chromosome[0])
-    return chromosome
+    remain = [x for x in chromosome if x not in fixed_pos]
+    final = fixed_pos + remain
+    return final
 
 
 def cal_fitness(chromosome, city_table):
@@ -49,24 +58,17 @@ def cal_fitness(chromosome, city_table):
         city_b_y = city_table.iloc[chromosome[i+1], 1]
         dis = np.round(math.sqrt(((city_a_x - city_b_x)**2) + ((city_a_y - city_b_y)**2)), 5)
         fitness += dis
-    # city_end_x = city_table.iloc[chromosome[-1], 0]
-    # city_end_y = city_table.iloc[chromosome[-1], 1]
-    # city_start_x = city_table.iloc[chromosome[0], 0]
-    # city_start_y = city_table.iloc[chromosome[0], 0]
-    # dis = np.round(math.sqrt(((city_end_x - city_start_x) ** 2) + ((city_end_y - city_start_y) ** 2)), 5)
-    # fitness += dis
-    # fitness = fitness/(len(chromosome))
     return (1/fitness) * 100
 
 
-def init_pop(pop_size, city_table):
+def init_pop(pop_size, city_table, fixed_pos=[]):
     """
     This function is use to initialize the initial evolving population of the GA in a initialized pandas Dataframe
     :return: DataFrame pop_table
     """
     pop_table = pd.DataFrame(columns=['chromosome', 'fitness'], index=range(pop_size))
     for i in range(pop_size):
-        chromosome = generate_chromosome(len(city_table))
+        chromosome = generate_chromosome(len(city_table), fixed_pos)
         pop_table.at[i, 'chromosome'] = chromosome
         pop_table.at[i, 'fitness'] = cal_fitness(chromosome, city_table)
     #print(pop_table)
@@ -116,10 +118,6 @@ def crossover(parent1, parent2):
     start = random.randint(0, len(c1)-1)
     end = random.randint(start, len(c1)-1)
     difference = list(set(c2) - set(c1[start:end+1]))
-    # print(c1)
-    # print(c2)
-    # print(c1[start:end+1])
-    # print(difference)
     order_q = []
     for i in range(len(difference)):
         heapq.heappush(order_q, (c2.index(difference[i]), difference[i]))
@@ -131,26 +129,27 @@ def crossover(parent1, parent2):
     return c1
 
 
-def crossover2(parent1, parent2):
+def crossover2(parent1, parent2, fixed_pos=[]):
     """
     Perform recombination for order-based representation
     :return: dataframe with 2 new offsprings
     """
+    len_fix = len(fixed_pos)
     c1 = parent1['chromosome'].iloc[0].copy()
     c2 = parent2['chromosome'].iloc[0].copy()
-    a = random.randint(0, len(c1))
-    b = random.randint(0, len(c1))
+    a = random.randint(len_fix, len(c1))
+    b = random.randint(len_fix, len(c1))
     while b == a:
-        b = random.randint(0, len(c1))
-    new = []
+        b = random.randint(len_fix, len(c1))
+    new = c1[0:len_fix]
     c1_ex = c1[min(a,b):max(a,b)]
     new += c1_ex
     c2_ex = [item for item in c2 if item not in new]
     new += c2_ex
     return new
 
-def crossover_one(parent1, parent2, city_table):
-    c1 = crossover2(parent1, parent2)
+def crossover_one(parent1, parent2, city_table, fixed_pos=[]):
+    c1 = crossover2(parent1, parent2, fixed_pos)
     fitness1 = cal_fitness(c1, city_table)
     cross_spring = pd.DataFrame({'chromosome': [c1], 'fitness': [fitness1]})
     return cross_spring
@@ -170,17 +169,26 @@ def crossover_all(parent1, parent2, city_table):
     return cross_spring
 
 
-def mutation(chromosome):
+def mutation(chromosome, fixed_pos=[]):
     """
     :param chromosome: List
     :return: List
     """
-    point1 = random.randint(0, len(chromosome) - 1)
-    point2 = random.randint(0, len(chromosome) - 1)
+    len_fix = len(fixed_pos)
+    point1 = random.randint(len_fix, len(chromosome) - 1)
+    point2 = random.randint(len_fix, len(chromosome) - 1)
     while point1 == point2:
-        point2 = random.randint(0, len(chromosome) - 1)
+        point2 = random.randint(len_fix, len(chromosome) - 1)
     chromosome[point2], chromosome[point1] = chromosome[point1], chromosome[point2]
     return chromosome
+
+
+def mutation_one(parent, city_table, fixed_pos=[]):
+    parent1 = parent['chromosome'].iloc[0]
+    f_offspring1 = mutation(parent1, fixed_pos)
+    fitness1 = cal_fitness(f_offspring1, city_table)
+    offspring = pd.DataFrame({'chromosome': [f_offspring1], 'fitness': [fitness1]})
+    return offspring
 
 
 def mutation_all(parent, city_table):
@@ -199,8 +207,8 @@ def mutation_all(parent, city_table):
     return offspring
 
 
-def GA_process(para, city_table=city_10):
-    pop_table = init_pop(para['pop_size'], city_table)
+def GA_process(para, city_table=city_10, fixed_pos=[]):
+    pop_table = init_pop(para['pop_size'], city_table, fixed_pos)
     # print('The initial population')
     # print(pop_table)
     epoch = 0
@@ -214,24 +222,24 @@ def GA_process(para, city_table=city_10):
         # Perform crossover if within probability
         crossover_p = random.random()
         if crossover_p < para['crossover_rate']:
-            offspring = crossover_all(parent[0:1], parent[1:2], city_table)
+            offspring = crossover_one(parent[0:1], parent[1:2], city_table,fixed_pos)
             # Perform mutation if within probability
             mutation_p = random.random()
             if mutation_p < para['mutation_rate']:
-                offspring = mutation_all(offspring, city_table)
+                offspring = mutation_one(offspring, city_table, fixed_pos)
             pop_table = pop_table.append(offspring, ignore_index=True)
         else:
             mutation_p = random.random()
             offspring = parent
             if mutation_p < para['mutation_rate']:
-                offspring = mutation_all(offspring, city_table)
+                offspring = mutation_one(offspring, city_table, fixed_pos)
                 pop_table = pop_table.append(offspring, ignore_index=True)
 
         # print('The number of chromosome in population is :' + str(len(pop_table)))
         # Elitism
-        if len(pop_table) == para['pop_size'] + 2:
+        if len(pop_table) == para['pop_size'] + 1:
             pop_table = pop_table.drop(pop_table['fitness'].astype('float64').idxmin())
-            pop_table = pop_table.drop(pop_table['fitness'].astype('float64').idxmin())
+            # pop_table = pop_table.drop(pop_table['fitness'].astype('float64').idxmin())
             pop_table = pop_table.reset_index(drop=True)
         epoch += 1
         mean_fit = pop_table['fitness'].mean()
@@ -275,24 +283,72 @@ def add_more_city(org_table, num):
     return org_table
 
 
-
+def draw_route():
+    return
 
 
 if __name__ == "__main__":
-    random.seed(10)
-    par = init_para(pop_size=10, max_gen=15, k_tournament=3, crossover_rate=0.85, mutation_rate=0.3)
+    random.seed()
+    par = init_para(pop_size=100, max_gen=300, k_tournament=10, crossover_rate=0.95, mutation_rate=0.03)
+    print(os.getcwd())
+    # Basic 10 city problem
     # result = GA_process(par)
     # draw(par, result[0], result[2], result[3])
 
+    # More city:
     # more_city = add_more_city(city_10, 24)
-    # result = GA_process(par)
-    # print(result[0])
-    pop_table = init_pop(par['pop_size'], city_10)
-    print(pop_table)
-    parent = selection(pop_table, par['k_tournament'])
-    print(parent)
-    offspring = crossover2(parent[0:1], parent[1:2])
-    print(offspring)
+    # par = init_para(pop_size=300, max_gen=100, k_tournament=10, crossover_rate=0.95, mutation_rate=0.03)
+    # result = GA_process(par, city_table=more_city)
 
+    # Implied start and end city: Its a two-sequence ordering problem with adjustment of fitness value
+    # start_end = [6, 7]
+    # result = GA_process(par, fixed_pos=start_end)
+    # print(result[0])
+
+    # EXTENSION 2: Sequential ordering problem
+    # fixed_point = [6, 7, 8]
+    # result = GA_process(par, fixed_pos=fixed_point)
+    # print(result[0])
+
+    # EXTENSION 4: Clustering problem
+    data = pd.read_table('C:/Users/roder/Desktop/Project 1/Dataset/Cluster_dataset.txt', header=None,
+                         delim_whitespace=True)
+    data.columns = ["x", "y"]
+    cluster_city = data.to_numpy()
+
+    # kmeans = KMeans(n_clusters=3, max_iter=300)
+    # label = kmeans.fit_predict(cluster_city)
+
+    # model = Birch(threshold=0.1, n_clusters=3)
+    # model.fit(cluster_city)
+    # label = model.predict(cluster_city)
+
+    # model = AffinityPropagation(damping=0.9)
+    # model.fit(cluster_city)
+    # label = model.predict(cluster_city)
+
+    # model = DBSCAN(eps=0.03, min_samples=2)
+    # label = model.fit_predict(cluster_city)
+
+    model = SpectralClustering(n_clusters=3, random_state=10)
+    label = model.fit_predict(cluster_city)
+
+    data['label'] = label
+    unique_l = np.unique(label)
+    for i in unique_l:
+        plt.scatter(data[data['label']==i]['x'], data[data['label']==i]['y'], label=i)
+    plt.legend()
+    plt.show()
+
+    # For testing purpose
+    # fixed_point = [6, 7, 8]
+    # pop_table = init_pop(par['pop_size'], city_10, fixed_point)
+    # print(pop_table.head(5))
+    # parent = selection(pop_table, par['k_tournament'])
+    # print(parent)
+    # offspring = crossover_one(parent[0:1], parent[1:2], city_10, fixed_point)
+    # print(offspring)
+    # offspring = mutation_one(offspring, city_10, fixed_point)
+    # print(offspring)
 
 

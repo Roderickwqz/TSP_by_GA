@@ -12,7 +12,7 @@ city_10 = pd.DataFrame(np.array([[0.3642,0.7779], [0.7185,0.8312], [0.0986,0.589
                        columns=['x', 'y'])
 
 
-def init_para(pop_size=10, mutation_rate=0.03, crossover_rate=0.8, chromosome_len=30, k_tournament=4):
+def init_para(pop_size=10, mutation_rate=0.03, crossover_rate=0.8, chromosome_len=30, k_tournament=4, max_gen=21):
     """
     Initialize parameters for Genetic algorithms.
     crossover_rate: Probability of crossover (typically near 1)
@@ -20,7 +20,7 @@ def init_para(pop_size=10, mutation_rate=0.03, crossover_rate=0.8, chromosome_le
     :return: A dictionary with parameters as key
     """
     para_dict = {'pop_size': pop_size, 'mutation_rate': mutation_rate, 'crossover_rate': crossover_rate,
-                 'chromosome_len': chromosome_len, 'k_tournament': k_tournament}
+                 'chromosome_len': chromosome_len, 'k_tournament': k_tournament, 'max_generation': max_gen}
     return para_dict
 
 
@@ -54,8 +54,8 @@ def cal_fitness(chromosome, city_table):
     city_start_y = city_table.iloc[chromosome[0], 0]
     dis = np.round(math.sqrt(((city_end_x - city_start_x) ** 2) + ((city_end_y - city_start_y) ** 2)), 5)
     fitness += dis
-    fitness = fitness/(len(chromosome))
-    return (1/fitness) * 100
+    # fitness = fitness/(len(chromosome))
+    return (1/fitness) * 10
 
 
 def init_pop(pop_size, city_table):
@@ -130,13 +130,26 @@ def crossover(parent1, parent2):
     return c1
 
 
-def crossover_all(parent1, parent2):
+def crossover_all(parent1, parent2, city_table):
+    """
+    :param parent1: list
+    :param parent2: list
+    :param city_table: dataframe
+    :return:
+    """
     c1 = crossover(parent1, parent2)
     c2 = crossover(parent2, parent1)
-    return c1, c2
+    fitness1 = cal_fitness(c1, city_table)
+    fitness2 = cal_fitness(c2, city_table)
+    cross_spring = pd.DataFrame({'chromosome': [c1, c2], 'fitness': [fitness1, fitness2]})
+    return cross_spring
 
 
 def mutation(chromosome):
+    """
+    :param chromosome: List
+    :return: List
+    """
     point1 = random.randint(0, len(chromosome) - 1)
     point2 = random.randint(0, len(chromosome) - 1)
     while point1 == point2:
@@ -146,8 +159,13 @@ def mutation(chromosome):
 
 
 def mutation_all(parent, city_table):
-    parent1 = parent[0]
-    parent2 = parent[1]
+    """
+    :param parent: dataframe
+    :param city_table:
+    :return:
+    """
+    parent1 = parent['chromosome'].iloc[0]
+    parent2 = parent['chromosome'].iloc[1]
     f_offspring1 = mutation(parent1)
     f_offspring2 = mutation(parent2)
     fitness1 = cal_fitness(f_offspring1, city_table)
@@ -157,21 +175,65 @@ def mutation_all(parent, city_table):
 
 
 def GA_process(para, city_table=city_10):
-    pop_table = init_pop(para['pop_size'], city_10)
-    print(pop_table)
-    parent = selection(pop_table, para['k_tournament'])
-    temp_sons = crossover_all(parent[0:1], parent[1:2])
-    offspring = mutation_all(temp_sons, city_10)
-    pop_table = pop_table.append(offspring, ignore_index=True)
-    pop_table = pop_table.loc[pop_table['fitness'] != pop_table['fitness'].min()]
-    pop_table = pop_table.loc[pop_table['fitness'] != pop_table['fitness'].min()]
-    pop_table = pop_table.reset_index(drop=True)
+    pop_table = init_pop(para['pop_size'], city_table)
+    # print('The initial population')
+    # print(pop_table)
+    epoch = 0
+    while epoch < para['max_generation']:
+        print('The current epoch is ' + str(epoch))
+        # print('The current len of population is ' + str(len(pop_table)))
+        # if epoch == 19:
+        #     print('The population table before GA when 19')
+        #     print(pop_table)
+
+        parent = selection(pop_table, para['k_tournament'])
+
+        # Perform crossover if within probability
+        crossover_p = random.random()
+        if crossover_p < para['crossover_rate']:
+            offspring = crossover_all(parent[0:1], parent[1:2], city_table)
+            # Perform mutation if within probability
+            mutation_p = random.random()
+            if mutation_p < para['mutation_rate']:
+                offspring = mutation_all(offspring, city_table)
+            pop_table = pop_table.append(offspring, ignore_index=True)
+        else:
+            mutation_p = random.random()
+            if mutation_p < para['mutation_rate']:
+                offspring = mutation_all(offspring, city_table)
+                pop_table = pop_table.append(offspring, ignore_index=True)
+
+        # print('The number of chromosome in population is :' + str(len(pop_table)))
+        # if epoch == 19:
+        #     print('The offspring after GA WHEN 19')
+        #     print(offspring)
+        #     print('The population table after GA when 19')
+        #     print(pop_table)
+        # Elitism
+        if len(pop_table) == para['pop_size'] + 2:
+            pop_table = pop_table.drop(pop_table['fitness'].astype('float64').idxmin())
+            pop_table = pop_table.drop(pop_table['fitness'].astype('float64').idxmin())
+            pop_table = pop_table.reset_index(drop=True)
+            # if epoch == 19:
+            #     print('The population table after elitism when 19')
+            #     print(pop_table)
+        epoch += 1
+    # print('The population table after genetic algorithm')
     print(pop_table)
 
 # init_para(pop_size=100, mutation_rate=0.03, crossover_rate=0.8, chromosome_len=30, k_tournament=6):
 
 
 if __name__ == "__main__":
-    random.seed(32)
-    par = init_para()
+    random.seed()
+    par = init_para(pop_size=100, max_gen=30)
     GA_process(par)
+
+    # population_table = init_pop(10, city_10)
+    # print(len(population_table))
+    # parent = selection(pop_table, 3)
+    # temp_sons = crossover_all(parent[0:1], parent[1:2], city_10)
+    # print(temp_sons)
+    # offspring = mutation_all(temp_sons, city_10)
+    # print(offspring)
+    # print(parent)

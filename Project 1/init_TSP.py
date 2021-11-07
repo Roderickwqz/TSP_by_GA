@@ -293,3 +293,5 @@ if __name__ == "__main__":
     offspring = crossover2(parent[0:1], parent[1:2])
     print(offspring)
 
+
+

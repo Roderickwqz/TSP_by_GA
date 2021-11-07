@@ -131,6 +131,30 @@ def crossover(parent1, parent2):
     return c1
 
 
+def crossover2(parent1, parent2):
+    """
+    Perform recombination for order-based representation
+    :return: dataframe with 2 new offsprings
+    """
+    c1 = parent1['chromosome'].iloc[0].copy()
+    c2 = parent2['chromosome'].iloc[0].copy()
+    a = random.randint(0, len(c1))
+    b = random.randint(0, len(c1))
+    while b == a:
+        b = random.randint(0, len(c1))
+    new = []
+    c1_ex = c1[min(a,b):max(a,b)]
+    new += c1_ex
+    c2_ex = [item for item in c2 if item not in new]
+    new += c2_ex
+    return new
+
+def crossover_one(parent1, parent2, city_table):
+    c1 = crossover2(parent1, parent2)
+    fitness1 = cal_fitness(c1, city_table)
+    cross_spring = pd.DataFrame({'chromosome': [c1], 'fitness': [fitness1]})
+    return cross_spring
+
 def crossover_all(parent1, parent2, city_table):
     """
     :param parent1: list
@@ -251,28 +275,7 @@ def add_more_city(org_table, num):
     return org_table
 
 
-def crossover2(parent1, parent2):
-    """
-    Perform recombination for order-based representation
-    :return: dataframe with 2 new offsprings
-    """
-    c1 = parent1['chromosome'].iloc[0].copy()
-    c2 = parent2['chromosome'].iloc[0].copy()
-    start = random.randint(0, len(c1)-1)
-    end = random.randint(start, len(c1)-1)
-    c1_ex = c1[start:end]
-    c2_ex = [item for item in c2 if item not in c1_ex]
-    new = []
-    p1 = 0
-    p2 = 0
-    for i in range(len(c1)):
-        if i < start or i > end:
-            new.append(c2_ex[p2])
-            p2 += 1
-        else:
-            new.append(c1_ex[p1])
-            p1 += 1
-    return new
+
 
 
 if __name__ == "__main__":
@@ -288,8 +291,6 @@ if __name__ == "__main__":
     print(pop_table)
     parent = selection(pop_table, par['k_tournament'])
     print(parent)
-
-
     offspring = crossover2(parent[0:1], parent[1:2])
     print(offspring)
 

@@ -4,17 +4,17 @@ import random
 import math
 import heapq
 import matplotlib.pyplot as plt
-from sklearn.cluster import KMeans
 import os
 from sklearn.cluster import Birch
 from sklearn.cluster import KMeans
 from sklearn.cluster import AffinityPropagation
 from sklearn.cluster import DBSCAN
+from sklearn.cluster import KMeans
 from sklearn.cluster import SpectralClustering
 
 numberOfCity = 10
 
-city_10 = pd.DataFrame(np.array([[0.3642,0.7779], [0.7185,0.8312], [0.0986,0.5891], [0.2954,0.9606],
+city_10 = pd.DataFrame(np.array([[0.3642,0.7770], [0.7185,0.8312], [0.0986,0.5891], [0.2954,0.9606],
                                  [0.5951,0.4647], [0.6697,0.7657], [0.4353, 0.1709], [0.2131,0.8349],
                                  [0.3479,0.6984], [0.4516,0.0488]]),
                        columns=['x', 'y'])
@@ -56,12 +56,13 @@ def cal_fitness(chromosome, city_table):
         city_a_y = city_table.iloc[chromosome[i], 1]
         city_b_x = city_table.iloc[chromosome[i+1], 0]
         city_b_y = city_table.iloc[chromosome[i+1], 1]
-        dis = np.round(math.sqrt(((city_a_x - city_b_x)**2) + ((city_a_y - city_b_y)**2)), 5)
+        dis = math.sqrt(((city_a_x - city_b_x)**2) + ((city_a_y - city_b_y)**2))
         fitness += dis
-    return (1/fitness) * 100
+        # np.round((1 / fitness) * 100, 3)
+    return (1 / fitness) * 100
 
 
-def init_pop(pop_size, city_table, fixed_pos=[]):
+def init_pop(pop_size, city_table=city_10, fixed_pos=[]):
     """
     This function is use to initialize the initial evolving population of the GA in a initialized pandas Dataframe
     :return: DataFrame pop_table
@@ -207,7 +208,76 @@ def mutation_all(parent, city_table):
     return offspring
 
 
+def new_offspring(parent1, parent2, para, city_table=city_10, fixed_pos=[]):
+    """
+    Version 3: This is the process of getting new_offspring with crossover, and mutation
+    :param  Dataframe parent1: chromosome choosing randomly
+    :param  Dataframe parent2: chromosome choosing randomly
+    :return: Dataframe offspring
+    """
+    cross_prob = para['crossover_rate']
+    mut_prob = para['mutation_rate']
+    crossover_p = random.random()
+    muatation_p = random.random()
+
+    if crossover_p < cross_prob:
+        offspring = crossover_one(parent1, parent2, city_table, fixed_pos)
+    else:
+        offspring = parent1
+
+    if muatation_p < mut_prob:
+        offspring = mutation_one(offspring, city_table, fixed_pos)
+
+    return offspring
+
+
+def next_generation(pop_table, para, city_table=city_10, fixed_pos=[]):
+    """
+    The process of one iteration of GA. VERSION 3
+    :return:
+    """
+    pop_size = para['pop_size']
+    next_gen = pd.DataFrame(columns=['chromosome', 'fitness'])
+    best = pop_table.iloc[pop_table['fitness'].astype('float64').idxmax()]
+    next_gen = next_gen.append(best)
+    curr_c = 0
+    # print(pop_size)
+    while curr_c < pop_size-1:
+        paren = selection(pop_table, par['k_tournament'])
+        offsprin = new_offspring(paren[0:1], paren[1:2], par, city_table, fixed_pos)
+        next_gen = next_gen.append(offsprin)
+        curr_c += 1
+    next_gen = next_gen.reset_index(drop=True)
+    return next_gen
+
+
+def GA_Process3(para, city_table=city_10, fixed_pos=[]):
+    """
+    :param para:
+    :param city_table: the cities
+    :param fixed_pos: the cities that must be travelled
+    :return:
+    """
+    pop_table = init_pop(para['pop_size'], city_table, fixed_pos)
+    # print('The initial table is ')
+    # print(pop_table)
+    cur_c = 0
+    while cur_c < para['max_generation']:
+        pop_table = next_generation(pop_table, para, city_table=city_10, fixed_pos=fixed_pos)
+        print('Current iteration is ' + str(cur_c+1))
+        optimal = pop_table.iloc[pop_table['fitness'].astype('float').idxmax()]
+        print('the optimal distance is ' + str(100 / (optimal['fitness'])))
+        print('The optimal solution is ' + str(optimal['chromosome']))
+        print('')
+        cur_c += 1
+    return pop_table
+
+
 def GA_process(para, city_table=city_10, fixed_pos=[]):
+    """
+    This is the function for version 2. NOT final one
+    :return:
+    """
     pop_table = init_pop(para['pop_size'], city_table, fixed_pos)
     # print('The initial population')
     # print(pop_table)
@@ -287,28 +357,61 @@ def draw_route():
     return
 
 
+def plot_cluster(data, label):
+    """
+    :param df: dataframe of the input data
+    :param lab: label that outputted by model prediction
+    :return:
+    """
+    data['label'] = label
+    unique_l = np.unique(label)
+    for i in unique_l:
+        plt.scatter(data[data['label']==i]['x'], data[data['label']==i]['y'], label=i)
+    plt.legend()
+    plt.show()
+
+
 if __name__ == "__main__":
-    random.seed()
-    par = init_para(pop_size=100, max_gen=300, k_tournament=10, crossover_rate=0.95, mutation_rate=0.03)
-    print(os.getcwd())
+    random.seed(3)
     # Basic 10 city problem
+    # Version 3 -----------------------------------
+    # par = init_para(pop_size=100, max_gen=30, k_tournament=5, crossover_rate=0.85, mutation_rate=0.03)
+    # GA_Process3(par, city_table=city_10, fixed_pos=[])
+    # Version 2-----------------------------------
     # result = GA_process(par)
     # draw(par, result[0], result[2], result[3])
 
     # More city:
+    # Version 3-----------------------------------
+    # par = init_para(pop_size=100, max_gen=30, k_tournament=5, crossover_rate=0.85, mutation_rate=0.03)
+    # more_city = add_more_city(city_10, 24)
+    # GA_Process3(par, city_table=more_city, fixed_pos=[])
+    # Version 2-----------------------------------
     # more_city = add_more_city(city_10, 24)
     # par = init_para(pop_size=300, max_gen=100, k_tournament=10, crossover_rate=0.95, mutation_rate=0.03)
     # result = GA_process(par, city_table=more_city)
 
     # Implied start and end city: Its a two-sequence ordering problem with adjustment of fitness value
+    # Version 3-----------------------------------
+    # par = init_para(pop_size=100, max_gen=30, k_tournament=5, crossover_rate=0.85, mutation_rate=0.03)
+    # start_end = [8, 9]
+    # GA_Process3(par, city_table=city_10, fixed_pos=start_end)
+    # Version 2-----------------------------------
     # start_end = [6, 7]
     # result = GA_process(par, fixed_pos=start_end)
     # print(result[0])
 
     # EXTENSION 2: Sequential ordering problem
+    # Version 3-----------------------------------
+    # par = init_para(pop_size=100, max_gen=30, k_tournament=5, crossover_rate=0.85, mutation_rate=0.03)
+    # fixed_point = [1,2,3]
+    # GA_Process3(par, city_table=city_10, fixed_pos=fixed_point)
+    # Version 2-----------------------------------
     # fixed_point = [6, 7, 8]
     # result = GA_process(par, fixed_pos=fixed_point)
     # print(result[0])
+
+
 
     # EXTENSION 4: Clustering problem
     data = pd.read_table('C:/Users/roder/Desktop/Project 1/Dataset/Cluster_dataset.txt', header=None,
@@ -333,22 +436,5 @@ if __name__ == "__main__":
     model = SpectralClustering(n_clusters=3, random_state=10)
     label = model.fit_predict(cluster_city)
 
-    data['label'] = label
-    unique_l = np.unique(label)
-    for i in unique_l:
-        plt.scatter(data[data['label']==i]['x'], data[data['label']==i]['y'], label=i)
-    plt.legend()
-    plt.show()
-
-    # For testing purpose
-    # fixed_point = [6, 7, 8]
-    # pop_table = init_pop(par['pop_size'], city_10, fixed_point)
-    # print(pop_table.head(5))
-    # parent = selection(pop_table, par['k_tournament'])
-    # print(parent)
-    # offspring = crossover_one(parent[0:1], parent[1:2], city_10, fixed_point)
-    # print(offspring)
-    # offspring = mutation_one(offspring, city_10, fixed_point)
-    # print(offspring)
-
+    plot_cluster(data, label)
 

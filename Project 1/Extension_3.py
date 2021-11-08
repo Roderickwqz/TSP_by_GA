@@ -4,7 +4,14 @@ import random
 import math
 import heapq
 import matplotlib.pyplot as plt
-from sklearn import preprocessing
+import os
+from sklearn.cluster import Birch
+from sklearn.cluster import KMeans
+from sklearn.cluster import AffinityPropagation
+from sklearn.cluster import DBSCAN
+from sklearn.cluster import KMeans
+from sklearn.cluster import SpectralClustering
+from sklearn.mixture import GaussianMixture
 
 numberOfCity = 10
 
@@ -40,26 +47,21 @@ def generate_chromosome(numberOfCity, fixed_pos=[]):
     return final
 
 
-def cal_fit_asymm(chromosome, city_asym):
+def cal_fitness(chromosome, city_table):
     """
     This function calculate the chromosome's fitness score which equal to average of sum of distance * 1000.
     """
     fitness = 0
     for i in range(-1, len(chromosome)-1):
-        if chromosome[i] > chromosome[i+1]:
-            city_a_x = city_asym.iloc[chromosome[i], 0]
-            city_a_y = city_asym.iloc[chromosome[i], 1]
-            city_b_x = city_asym.iloc[chromosome[i+1], 0]
-            city_b_y = city_asym.iloc[chromosome[i+1], 1]
+        if city_table['READY_TIME'].iloc[i+1] <= fitness <= city_table['DUE_DATE'].iloc[i+1]:
+            city_a_x = city_table.iloc[chromosome[i], 1]
+            city_a_y = city_table.iloc[chromosome[i], 2]
+            city_b_x = city_table.iloc[chromosome[i+1], 1]
+            city_b_y = city_table.iloc[chromosome[i+1], 2]
             dis = math.sqrt(((city_a_x - city_b_x)**2) + ((city_a_y - city_b_y)**2))
-            fitness += dis
         else:
-            city_a_x = city_asym.iloc[chromosome[i], 2]
-            city_a_y = city_asym.iloc[chromosome[i], 1]
-            city_b_x = city_asym.iloc[chromosome[i + 1], 2]
-            city_b_y = city_asym.iloc[chromosome[i + 1], 1]
-            dis = math.sqrt(((city_a_x - city_b_x) ** 2) + ((city_a_y - city_b_y) ** 2))
-            fitness += dis
+            dis = -999
+        fitness += dis
         # np.round((1 / fitness) * 100, 3)
     return (1 / fitness) * 100
 
@@ -73,7 +75,7 @@ def init_pop(pop_size, city_table=city_10, fixed_pos=[]):
     for i in range(pop_size):
         chromosome = generate_chromosome(len(city_table), fixed_pos)
         pop_table.at[i, 'chromosome'] = chromosome
-        pop_table.at[i, 'fitness'] = cal_fit_asymm(chromosome, city_table)
+        pop_table.at[i, 'fitness'] = cal_fitness(chromosome, city_table)
     #print(pop_table)
     return pop_table
 
@@ -130,12 +132,12 @@ def crossover2(parent1, parent2, fixed_pos=[]):
     new += c2_ex
     return new
 
+
 def crossover_one(parent1, parent2, city_table, fixed_pos=[]):
     c1 = crossover2(parent1, parent2, fixed_pos)
-    fitness1 = cal_fit_asymm(c1, city_table)
+    fitness1 = cal_fitness(c1, city_table)
     cross_spring = pd.DataFrame({'chromosome': [c1], 'fitness': [fitness1]})
     return cross_spring
-
 
 
 def mutation(chromosome, fixed_pos=[]):
@@ -155,9 +157,10 @@ def mutation(chromosome, fixed_pos=[]):
 def mutation_one(parent, city_table, fixed_pos=[]):
     parent1 = parent['chromosome'].iloc[0]
     f_offspring1 = mutation(parent1, fixed_pos)
-    fitness1 = cal_fit_asymm(f_offspring1, city_table)
+    fitness1 = cal_fitness(f_offspring1, city_table)
     offspring = pd.DataFrame({'chromosome': [f_offspring1], 'fitness': [fitness1]})
     return offspring
+
 
 
 def new_offspring(parent1, parent2, para, city_table=city_10, fixed_pos=[]):
@@ -199,7 +202,9 @@ def next_generation(pop_table, para, city_table=city_10, fixed_pos=[]):
         offsprin = new_offspring(paren[0:1], paren[1:2], para, city_table, fixed_pos)
         next_gen = next_gen.append(offsprin)
         curr_c += 1
-    next_gen = next_gen.reset_index(drop=True)
+    next_gen.append(pop_table)
+    next_gen = next_gen[next_gen['fitness']>0]
+    print('THE LEN OF NEXT_GEN IS ' + str(next_gen))
     return next_gen
 
 
@@ -279,19 +284,31 @@ def draw_route(optimal, city_table=city_10):
     return
 
 
-def ge_city_asym(city_table, seed=1):
-    random.seed(seed)
-    s = [pd.Series(np.random.randn(len(city_table)))]
-    normal = (preprocessing.normalize(s) / 100)[0]
-    city_table['x_as'] = city_table['x'] + normal
-    return city_table
+def plot_cluster(data, label):
+    """
+    :param df: dataframe of the input data
+    :param lab: label that outputted by model prediction
+    :return:
+    """
+    data['label'] = label
+    unique_l = np.unique(label)
+    for i in unique_l:
+        plt.scatter(data[data['label']==i]['x'], data[data['label']==i]['y'], label=i)
+    plt.legend()
+    plt.show()
+
+
+# def draw_compare(max_gen, best_fit1):  #, best_fit2, best_fit3
+#     plt.plot(range(0, max_gen), best_fit1, c="green")
+#     # plt.plot(range(0, max_gen), best_fit2, c="red")
+#     # plt.plot(range(0, max_gen), best_fit3, c="blue")
+#     # plt.title.set_text('Best fitness score')
+#     plt.show()
 
 
 if __name__ == "__main__":
-    par = init_para(pop_size=200, max_gen=10, k_tournament=5, crossover_rate=0.85, mutation_rate=0.05)
-    city_asm = ge_city_asym(city_10)
-    solution = GA_Process3(par, city_table=city_asm, fixed_pos=[])
-    # draw(par, solution[1], solution[2])
-    # draw_route(solution[0], city_table=city_asm)
-
-
+    random.seed()
+    data = pd.read_table('C:/Users/roder/Desktop/Project 1/Dataset/TSPTW_dataset.txt',
+                         delim_whitespace=True)
+    par = init_para(pop_size=100, max_gen=10, k_tournament=5, crossover_rate=0.85, mutation_rate=0.05)
+    solution = GA_Process3(par, city_table=data, fixed_pos=[])

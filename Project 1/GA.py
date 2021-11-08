@@ -411,8 +411,8 @@ if __name__ == "__main__":
     random.seed(3) #3
     # Basic 10 city problem
     # Version 3 -----------------------------------
-    # par = init_para(pop_size=100, max_gen=10, k_tournament=5, crossover_rate=0.4, mutation_rate=0.05)
-    # solution = GA_Process3(par, city_table=city_10, fixed_pos=[])
+    par = init_para(pop_size=200, max_gen=10, k_tournament=5, crossover_rate=0.85, mutation_rate=0.05)
+    solution = GA_Process3(par, city_table=city_10, fixed_pos=[])
     # draw(par, solution[1], solution[2])
     # draw_route(solution[0], city_table=city_10)
     # Version 2-----------------------------------
